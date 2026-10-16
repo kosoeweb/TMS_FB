@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UT - TMS Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <style>
+    body { background-color: #f4f6f9; }
+    .navbar { background: #601a1a !important; }
+    .card { border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .info-card { background: #ffffff; border-left: 5px solid #601a1a; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold text-white text-decoration-none d-flex align-items-center" href="#">
+        <img src="logo.png" alt="UT Logo" style="height: 45px; margin-right: 15px; border-radius: 6px;">
+        <div style="line-height: 1.2;">
+          Universal Tractor Co., Ltd.<br>
+          <small style="font-size: 0.8rem; font-weight: 400;">Talent Management System</small>
+        </div>
+      </a>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm mx-1">Directory</a>
+        <a href="transaction.html" class="btn btn-outline-light btn-sm mx-1">HR Records</a>
+        <a href="dashboard.html" class="btn btn-light btn-sm mx-1">Analytics</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-4">
+    <div class="card p-4">
+      <h4 class="text-primary fw-bold mb-4">Performance Analytics Dashboard</h4>
+      
+      <div class="row g-3 mb-4 bg-light p-3 rounded border">
+        <div class="col-md-2">
+          <label class="fw-bold text-muted small">Employee</label>
+          <input list="empList" id="filterEmp" class="form-control border-primary border-2" placeholder="ID or Name" onchange="renderView()">
+          <datalist id="empList"></datalist>
+        </div>
+        <div class="col-md-2">
+          <label class="fw-bold text-muted small">Start Date</label>
+          <input type="date" id="filterStart" class="form-control" onchange="renderView()">
+        </div>
+        <div class="col-md-2">
+          <label class="fw-bold text-muted small">End Date</label>
+          <input type="date" id="filterEnd" class="form-control" onchange="renderView()">
+        </div>
+        <div class="col-md-2">
+          <label class="fw-bold text-muted small">Category Filter</label>
+          <select id="filterCat" class="form-select border-primary" onchange="renderView()">
+            <option value="">All Records</option>
+            <option value="MERIT">Merit (+)</option>
+            <option value="DEMERIT">Demerit (-)</option>
+            <option value="ATTENDANCE">Attendance</option>
+            <option value="LEAVE">Leave</option>
+          </select>
+        </div>
+        <div class="col-md-4 text-end align-self-end">
+          <button class="btn btn-success px-4" onclick="exportExcel()">Export to Excel</button>
+        </div>
+      </div>
+
+      <div id="defaultSummaryView">
+        <h5 class="text-secondary fw-bold mb-3">Filtered Employee Summary Report</h5>
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered table-sm align-middle text-center shadow-sm">
+            <thead class="table-dark">
+              <tr>
+                <th width="8%">Profile</th>
+                <th width="12%">Emp ID</th>
+                <th width="20%">Full Name</th>
+                <th width="15%">Performance Score</th>
+                <th width="15%">Total Check-Ins</th>
+                <th width="15%">Late Entries</th>
+                <th width="15%">Pending Leaves</th>
+              </tr>
+            </thead>
+            <tbody id="defaultEmpBody">
+              <tr><td colspan="7" class="py-4 text-muted">Loading Data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="filteredDetailView" style="display: none;">
+        <div class="card info-card mb-4 shadow-sm" id="empInfoCard">
+          <div class="card-body d-flex flex-wrap align-items-center">
+            <img id="infoPhoto" src="" style="width:110px; height:110px; object-fit:cover; border-radius:8px; margin-right:25px; display:none;">
+            <div class="flex-grow-1">
+              <h4 id="infoName" class="fw-bold text-primary mb-2"></h4>
+              <div class="row g-2 text-dark">
+                <div class="col-md-4"><strong>Emp ID:</strong> <span id="infoCode"></span></div>
+                <div class="col-md-4"><strong>Dept:</strong> <span id="infoDept"></span> - <span id="infoPos"></span></div>
+                <div class="col-md-4"><strong>Phone:</strong> <span id="infoPhone"></span></div>
+                <div class="col-12 border-top pt-2 mt-2"><strong>Total Performance Score:</strong> <span id="infoScore" class="badge bg-success fs-6"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h5 class="text-secondary fw-bold">Detailed Employee Ledger</h5>
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+          <table class="table table-hover table-bordered table-sm align-middle" id="reportTable">
+            <thead class="table-dark sticky-top">
+              <tr><th>Date</th><th>Record ID/Type</th><th>Category</th><th>Emp ID & Name</th><th>Department</th><th>Score/Time</th><th>Evaluation Notes</th><th>Status / Action</th></tr>
+            </thead>
+            <tbody id="reportBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ၁။ သင်၏ Firebase Config အချက်အလက်များကို ဤနေရာတွင် အစားထိုးပါ
+    const firebaseConfig = {
+  apiKey: "AIzaSyCnQcsv8TekFkOyOPnb3UWZytPq7zBxLfI",
+  authDomain: "my-apps-a87a3.firebaseapp.com",
+  projectId: "my-apps-a87a3",
+  storageBucket: "my-apps-a87a3.firebasestorage.app",
+  messagingSenderId: "880270085984",
+  appId: "1:880270085984:web:d65a0c381172def3af1805"
+};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let rawData = [], activeEmps = [], attData = [], leaveData = [];
+
+    function getEmpName(empCode) {
+      let eObj = activeEmps.find(i => String(i.code) === String(empCode));
+      return eObj ? eObj.name : 'Unknown';
+    }
+
+    window.onload = async function() {
+      try {
+        const [eSnap, rSnap, aSnap, lSnap] = await Promise.all([
+          db.collection('employees').get(),
+          db.collection('records').get(),
+          db.collection('attendance').get(),
+          db.collection('leave').get()
+        ]);
+
+        activeEmps = eSnap.docs.map(d => d.data()).filter(i => i.status !== 'Inactive');
+        rawData = rSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        attData = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        leaveData = lSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        document.getElementById('empList').innerHTML = activeEmps.map(i => `<option value="${i.code}">${i.code} - ${i.name}</option>`).join('');
+        renderView();
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
+      }
+    };
+
+    async function toggleLeaveStatus(docId, checkbox) {
+      let newStatus = checkbox.checked ? 'Approved' : 'Pending';
+      try {
+        checkbox.disabled = true;
+        await db.collection('leave').doc(docId).update({ status: newStatus });
+        let idx = leaveData.findIndex(l => l.id === docId);
+        if (idx > -1) leaveData[idx].status = newStatus;
+        renderView();
+      } catch (err) {
+        checkbox.checked = !checkbox.checked;
+        Swal.fire('Error', err.message, 'error');
+      } finally {
+        checkbox.disabled = false;
+      }
+    }
+
+    function renderView() {
+      const fEmp = document.getElementById('filterEmp').value.toUpperCase().trim();
+      const fCat = document.getElementById('filterCat').value;
+      let fStart = document.getElementById('filterStart').value;
+      let fEnd = document.getElementById('filterEnd').value;
+      let startDate = fStart ? new Date(fStart).setHours(0,0,0,0) : null;
+      let endDate = fEnd ? new Date(fEnd).setHours(23,59,59,999) : null;
+
+      function isWithinBounds(dateStr) {
+        let parts = String(dateStr).split(',')[0].split('/');
+        let dObj = parts.length === 3 ? new Date(`${parts[2]}-${parts[1]}-${parts[0]}`) : new Date(dateStr);
+        let rd = dObj.getTime();
+        return (!startDate || rd >= startDate) && (!endDate || rd <= endDate);
+      }
+
+      let filteredAtt = attData.filter(r => isWithinBounds(r.date_str));
+      let filteredLeave = leaveData.filter(r => isWithinBounds(r.apply_date));
+      let filteredRecords = rawData.filter(r => isWithinBounds(r.date_str));
+
+      if (fEmp === '') {
+        document.getElementById('defaultSummaryView').style.display = 'block';
+        document.getElementById('filteredDetailView').style.display = 'none';
+
+        let scoreMap = {};
+        filteredRecords.forEach(row => {
+          let emp = String(row.emp_code).trim();
+          if (!scoreMap[emp]) scoreMap[emp] = 0;
+          scoreMap[emp] += (row.type === 'MERIT' ? Number(row.points) : -Number(row.points));
+        });
+
+        document.getElementById('defaultEmpBody').innerHTML = activeEmps.map(empObj => {
+          let empCode = empObj.code, score = scoreMap[empCode] || 0;
+          let imgTag = empObj.photoUrl ? `<img src="${empObj.photoUrl}" style="width:40px; height:40px; object-fit:cover; border-radius:5px;">` : '-';
+          let eAtt = filteredAtt.filter(a => String(a.emp_code) === empCode && a.type === 'Check-In');
+          let eLate = eAtt.filter(a => String(a.time_status).includes('Late') || String(a.time_status).includes('Half day')).length;
+          let eLeave = filteredLeave.filter(l => String(l.emp_code) === empCode && String(l.status).toUpperCase() === 'PENDING').length;
+
+          return `<tr><td>${imgTag}</td><td class="fw-bold">${empCode}</td><td class="text-start">${empObj.name}</td><td class="fw-bold ${score >= 0 ? 'text-success' : 'text-danger'}">${score}</td><td class="text-success fw-bold">${eAtt.length}</td><td class="text-danger fw-bold">${eLate}</td><td class="text-warning fw-bold">${eLeave}</td></tr>`;
+        }).join('');
+      } else {
+        document.getElementById('defaultSummaryView').style.display = 'none';
+        document.getElementById('filteredDetailView').style.display = 'block';
+
+        let empObj = activeEmps.find(i => i.code.toUpperCase() === fEmp);
+        if (empObj) {
+          document.getElementById('infoName').innerText = empObj.name;
+          document.getElementById('infoCode').innerText = empObj.code;
+          document.getElementById('infoDept').innerText = empObj.dept || '';
+          document.getElementById('infoPos').innerText = empObj.position || '-';
+          document.getElementById('infoPhone').innerText = empObj.phone || '-';
+          let imgEl = document.getElementById('infoPhoto');
+          if (empObj.photoUrl) { imgEl.src = empObj.photoUrl; imgEl.style.display = 'block'; } else { imgEl.style.display = 'none'; }
+        }
+
+        let allLedgerRows = [], empTotalScore = 0;
+        let tableRec = (fCat === '' || fCat === 'MERIT' || fCat === 'DEMERIT') ? filteredRecords.filter(r => !fCat || r.type === fCat) : [];
+        let tableAtt = (fCat === '' || fCat === 'ATTENDANCE') ? filteredAtt : [];
+        let tableLeave = (fCat === '' || fCat === 'LEAVE') ? filteredLeave : [];
+
+        tableRec.forEach(row => {
+          if (String(row.emp_code).toUpperCase() !== fEmp) return;
+          empTotalScore += (row.type === 'MERIT' ? Number(row.points) : -Number(row.points));
+          let badge = row.type === 'MERIT' ? '<span class="badge bg-success">MERIT (+)</span>' : '<span class="badge bg-danger">DEMERIT (-)</span>';
+          allLedgerRows.push({
+            time: row.created_at || 0,
+            html: `<tr><td>${row.date_str}</td><td class="fw-bold">${row.record_id}</td><td>${badge}</td><td>${row.emp_code} - ${getEmpName(row.emp_code)}</td><td>${row.dept}</td><td class="fw-bold">${row.points}</td><td>${row.line_remark}</td><td>${row.global_remark || '-'}</td></tr>`
+          });
+        });
+
+        tableAtt.forEach(row => {
+          if (String(row.emp_code).toUpperCase() !== fEmp) return;
+          allLedgerRows.push({
+            time: row.created_at || 0,
+            html: `<tr><td>${row.date_str}</td><td class="fw-bold">${row.type}</td><td><span class="badge bg-info text-dark">ATTENDANCE</span></td><td>${row.emp_code} - ${getEmpName(row.emp_code)}</td><td>-</td><td>${row.time_str}</td><td>${row.location}</td><td class="fw-bold">${row.time_status}</td></tr>`
+          });
+        });
+
+        tableLeave.forEach(row => {
+          if (String(row.emp_code).toUpperCase() !== fEmp) return;
+          let certLink = row.photoUrl ? `<br><a href="${row.photoUrl}" target="_blank" class="badge bg-primary mt-1 text-decoration-none">View Medical Cert</a>` : '';
+          let toggleHtml = `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" ${row.status === 'Approved' ? 'checked' : ''} onchange="toggleLeaveStatus('${row.id}', this)"> <span class="badge ${row.status === 'Approved' ? 'bg-success' : 'bg-warning text-dark'}">${row.status}</span></div>`;
+          allLedgerRows.push({
+            time: row.created_at || 0,
+            html: `<tr><td>${row.apply_date}</td><td class="fw-bold">${row.leave_type}</td><td><span class="badge bg-warning text-dark">LEAVE</span></td><td>${row.emp_code} - ${getEmpName(row.emp_code)}</td><td>-</td><td>${row.total_days} Days</td><td>${row.reason} ${certLink}</td><td>${toggleHtml}</td></tr>`
+          });
+        });
+
+        allLedgerRows.sort((a, b) => b.time - a.time);
+        document.getElementById('reportBody').innerHTML = allLedgerRows.map(r => r.html).join('') || '<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>';
+        document.getElementById('infoScore').innerText = empTotalScore;
+      }
+    }
+
+    function exportExcel() {
+      let fEmp = document.getElementById('filterEmp').value;
+      let table = fEmp === '' ? document.querySelector("#defaultSummaryView table") : document.getElementById("reportTable");
+      let wb = XLSX.utils.table_to_book(table, { sheet: "Report" });
+      XLSX.writeFile(wb, "Universal_Tractor_TMS_Report.xlsx");
+    }
+  </script>
+</body>
+</html>

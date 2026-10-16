@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UT - TMS HR Records</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <style>
+    body { background-color: #f4f6f9; }
+    .navbar { background: #601a1a !important; }
+    .card { border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .table th { background-color: #212529; color: white; }
+    .edit-mode-active { background-color: #fff3cd !important; border-color: #ffc107 !important; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold text-white text-decoration-none d-flex align-items-center" href="#">
+        <img src="logo.png" alt="UT Logo" style="height: 45px; margin-right: 15px; border-radius: 6px;">
+        <div style="line-height: 1.2;">
+          Universal Tractor Co., Ltd.<br>
+          <small style="font-size: 0.8rem; font-weight: 400;">Talent Management System</small>
+        </div>
+      </a>
+      <div>
+        <a href="index.html" class="btn btn-outline-light btn-sm mx-1">Directory</a>
+        <a href="transaction.html" class="btn btn-light btn-sm mx-1">HR Records</a>
+        <a href="dashboard.html" class="btn btn-outline-light btn-sm mx-1">Analytics</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-4">
+    <div class="card p-4 border-top border-primary border-4" id="mainCard">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="m-0 text-primary" id="formTitle">Performance & Disciplinary Records</h4>
+        <div class="form-check form-switch fs-5">
+          <input class="form-check-input border-secondary" type="checkbox" id="editToggle" onchange="toggleEditMode()">
+          <label class="form-check-label fw-bold text-warning" for="editToggle">Enable Edit Mode</label>
+        </div>
+      </div>
+      
+      <div class="row mb-4 bg-light p-3 rounded g-3">
+        <div class="col-md-3">
+          <label class="fw-bold">Record Category</label>
+          <select id="recordType" class="form-select border-success fw-bold text-success" onchange="toggleTypeStyle(this)">
+            <option value="MERIT">ACHIEVEMENT (+)</option>
+            <option value="DEMERIT" class="text-danger">DISCIPLINARY (-)</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="fw-bold text-dark">Record ID</label>
+          <input type="text" id="recordId" class="form-control border-primary" placeholder="e.g. REC-001">
+          <select id="editRecordIdSelect" class="form-select border-warning" style="display:none;" onchange="loadRecordData()">
+            <option value="">Select Record ID...</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="fw-bold">Official Remark</label>
+          <textarea id="globalRemark" class="form-control border-primary" rows="1" placeholder="Review Cycle, Policy Reference, etc."></textarea>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle text-center shadow-sm">
+          <thead>
+            <tr>
+              <th width="20%">Employee ID & Name</th>
+              <th width="20%">Department</th>
+              <th width="10%">Score</th>
+              <th width="10%">Points</th>
+              <th width="30%">Evaluation Notes</th>
+              <th width="10%">Action</th>
+            </tr>
+          </thead>
+          <tbody id="recordBody"></tbody>
+        </table>
+      </div>
+      <div class="mt-3">
+        <button class="btn btn-secondary btn-sm" onclick="addRow()">+ Add Evaluation</button>
+        <button class="btn btn-primary float-end px-5 fw-bold" onclick="submitRecord()" id="btnSubmit">Log Record</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ၁။ သင်၏ Firebase Config အချက်အလက်များကို ဤနေရာတွင် အစားထိုးပါ
+    const firebaseConfig = {
+  apiKey: "AIzaSyCnQcsv8TekFkOyOPnb3UWZytPq7zBxLfI",
+  authDomain: "my-apps-a87a3.firebaseapp.com",
+  projectId: "my-apps-a87a3",
+  storageBucket: "my-apps-a87a3.firebasestorage.app",
+  messagingSenderId: "880270085984",
+  appId: "1:880270085984:web:d65a0c381172def3af1805"
+};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let activeEmps = [];
+    let optionsEmp = '';
+    let isEditMode = false;
+    let originalRecordId = '';
+    let originalDateStr = '';
+
+    window.onload = async function() {
+      try {
+        const snap = await db.collection('employees').get();
+        activeEmps = snap.docs.map(d => d.data()).filter(i => i.status !== 'Inactive');
+        optionsEmp = activeEmps.map(i => `<option value="${i.code}">${i.code} - ${i.name}</option>`).join('');
+        addRow();
+      } catch (err) {
+        Swal.fire('Connection Error', err.message, 'error');
+      }
+    };
+
+    function toggleTypeStyle(selectEl) {
+      selectEl.className = selectEl.value === 'DEMERIT' ? 'form-select border-danger fw-bold text-danger' : 'form-select border-success fw-bold text-success';
+    }
+
+    async function toggleEditMode() {
+      isEditMode = document.getElementById('editToggle').checked;
+      let card = document.getElementById('mainCard'), btnSubmit = document.getElementById('btnSubmit');
+      let title = document.getElementById('formTitle'), createInput = document.getElementById('recordId');
+      let editSelect = document.getElementById('editRecordIdSelect');
+
+      if (isEditMode) {
+        card.classList.add('edit-mode-active');
+        btnSubmit.innerText = 'Update Record'; btnSubmit.classList.replace('btn-primary', 'btn-warning');
+        title.innerText = "Edit Existing Record"; title.classList.replace('text-primary', 'text-warning');
+        createInput.style.display = 'none'; editSelect.style.display = 'block';
+        editSelect.innerHTML = '<option value="">Loading IDs...</option>';
+
+        try {
+          const snap = await db.collection('records').get();
+          let uniqueIds = [...new Set(snap.docs.map(d => d.data().record_id))];
+          editSelect.innerHTML = '<option value="">-- Select Record ID --</option>' + uniqueIds.map(id => `<option value="${id}">${id}</option>`).join('');
+        } catch (err) { Swal.fire('Error', err.message, 'error'); }
+      } else {
+        card.classList.remove('edit-mode-active');
+        btnSubmit.innerText = 'Log Record'; btnSubmit.classList.replace('btn-warning', 'btn-primary');
+        title.innerText = "Performance & Disciplinary Records"; title.classList.replace('text-warning', 'text-primary');
+        createInput.style.display = 'block'; editSelect.style.display = 'none';
+        originalRecordId = ''; originalDateStr = ''; createInput.value = '';
+        document.getElementById('globalRemark').value = '';
+        document.getElementById('recordBody').innerHTML = ''; addRow();
+      }
+    }
+
+    async function loadRecordData() {
+      let rId = document.getElementById('editRecordIdSelect').value;
+      if (!rId) return;
+      try {
+        const snap = await db.collection('records').where('record_id', '==', rId).get();
+        if (snap.empty) return;
+        let rows = snap.docs.map(d => d.data());
+        document.getElementById('recordType').value = rows[0].type;
+        toggleTypeStyle(document.getElementById('recordType'));
+        document.getElementById('globalRemark').value = rows[0].global_remark || "";
+        originalRecordId = rows[0].record_id;
+        originalDateStr = rows[0].date_str;
+
+        document.getElementById('recordBody').innerHTML = '';
+        rows.forEach(r => addRow(r.emp_code, r.dept, r.points, r.line_remark));
+      } catch (err) { Swal.fire('Error', err.message, 'error'); }
+    }
+
+    function addRow(empVal = '', deptVal = '', ptsVal = '', remarkVal = '') {
+      const tr = document.createElement('tr');
+      let selectOpts = optionsEmp === '' ? '<option value="">No Active Employees</option>' : `<option value="">Select Employee...</option>${optionsEmp}`;
+      tr.innerHTML = `
+        <td><select class="form-select border-primary emp-sel" onchange="triggerCheck(this)">${selectOpts}</select></td>
+        <td><input type="text" class="form-control dept-sel bg-light text-center" readonly value="${deptVal}"></td>
+        <td class="score-cell"><span class="badge bg-secondary fs-6">-</span></td>
+        <td><input type="number" class="form-control border-primary pts-val" min="1" value="${ptsVal || 10}"></td>
+        <td><input type="text" class="form-control border-primary remark-val" value="${remarkVal}"></td>
+        <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">Remove</button></td>`;
+      document.getElementById('recordBody').appendChild(tr);
+      if (empVal) { tr.querySelector('.emp-sel').value = empVal; triggerCheck(tr.querySelector('.emp-sel')); }
+    }
+
+    async function triggerCheck(element) {
+      let row = element.closest('tr'), empCode = element.value;
+      let scoreCell = row.querySelector('.score-cell'), deptInput = row.querySelector('.dept-sel');
+      if (empCode) {
+        let emp = activeEmps.find(e => e.code === empCode);
+        if (emp) deptInput.value = emp.dept || '';
+        scoreCell.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div>';
+        let excludeId = (isEditMode && originalRecordId !== '') ? originalRecordId : '';
+        try {
+          const snap = await db.collection('records').where('emp_code', '==', empCode).get();
+          let score = 0;
+          snap.docs.forEach(doc => {
+            let r = doc.data();
+            if (excludeId && r.record_id === excludeId) return;
+            if (r.type === 'MERIT') score += Number(r.points);
+            else if (r.type === 'DEMERIT') score -= Number(r.points);
+          });
+          scoreCell.innerHTML = `<span class="badge ${score >= 0 ? 'bg-success' : 'bg-danger'} fs-6">${score}</span>`;
+        } catch (err) { scoreCell.innerHTML = `<span class="badge bg-danger">Err</span>`; }
+      } else {
+        deptInput.value = ''; scoreCell.innerHTML = '<span class="badge bg-secondary fs-6">-</span>';
+      }
+    }
+
+    async function submitRecord() {
+      const type = document.getElementById('recordType').value;
+      const recordId = isEditMode ? document.getElementById('editRecordIdSelect').value.trim() : document.getElementById('recordId').value.trim();
+      const globalRemark = document.getElementById('globalRemark').value;
+
+      if (!recordId) return Swal.fire('Warning', 'Record ID is required.', 'warning');
+      const rows = document.querySelectorAll('#recordBody tr');
+      let rowData = [];
+      for (let row of rows) {
+        let emp = row.querySelector('.emp-sel').value;
+        let dept = row.querySelector('.dept-sel').value;
+        let points = Number(row.querySelector('.pts-val').value);
+        let lineRemark = row.querySelector('.remark-val').value;
+        if (!emp || !points) return Swal.fire('Warning', 'Please fill Employee and Points.', 'warning');
+        rowData.push({
+          date_str: isEditMode ? originalDateStr : new Date().toLocaleString('en-GB'),
+          record_id: recordId, type, emp_code: emp, dept, points, line_remark: lineRemark, global_remark: globalRemark, created_at: Date.now()
+        });
+      }
+      if (rowData.length === 0) return;
+
+      let btnSubmit = document.getElementById('btnSubmit'); btnSubmit.disabled = true;
+      try {
+        if (isEditMode) {
+          const oldSnap = await db.collection('records').where('record_id', '==', originalRecordId).get();
+          await Promise.all(oldSnap.docs.map(d => d.ref.delete()));
+        }
+        await Promise.all(rowData.map(r => db.collection('records').add(r)));
+        Swal.fire('Success', 'HR Record saved successfully.', 'success');
+        document.getElementById('recordBody').innerHTML = ''; addRow();
+        document.getElementById('recordId').value = ''; document.getElementById('globalRemark').value = '';
+        if (isEditMode) { document.getElementById('editToggle').checked = false; toggleEditMode(); }
+      } catch (err) {
+        Swal.fire('Error', err.message, 'error');
+      } finally {
+        btnSubmit.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
