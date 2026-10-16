@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UT - Talent Management System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <style>
+    body { background-color: #f4f6f9; }
+    .navbar { background: #601a1a !important; }
+    .card { border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-expand-lg navbar-dark mb-4 shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold text-white text-decoration-none d-flex align-items-center" href="#">
+        <img src="logo.png" alt="UT Logo" style="height: 45px; margin-right: 15px; border-radius: 6px;">
+        <div style="line-height: 1.2;">
+          Universal Tractor Co., Ltd.<br>
+          <small style="font-size: 0.8rem; font-weight: 400;">Talent Management System</small>
+        </div>
+      </a>
+      <div class="d-flex align-items-center">
+        <span id="connStatus" class="badge bg-success me-2"><i class="bi bi-wifi"></i> Live</span>
+        <a href="index.html" class="btn btn-light btn-sm mx-1">Directory</a>
+        <a href="transaction.html" class="btn btn-outline-light btn-sm mx-1">HR Records</a>
+        <a href="dashboard.html" class="btn btn-outline-light btn-sm mx-1">Dashboard</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card p-4">
+      <h4 class="mb-4 text-primary fw-bold">Employee Directory & System Setup</h4>
+      <ul class="nav nav-tabs mb-4">
+        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#createEmp">Register Employee</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#editEmp">Edit Profile</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dept">Departments</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#settings">Job Structure & Settings</a></li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- ၁။ ဝန်ထမ်းအသစ်သွင်းခြင်း -->
+        <div class="tab-pane fade show active" id="createEmp">
+          <form id="formCreate" onsubmit="handleEmpSubmit(event, 'create')">
+            <div class="row g-3">
+              <div class="col-md-3"><label class="fw-bold">Employee ID</label><input type="text" class="form-control" name="code" required></div>
+              <div class="col-md-3"><label class="fw-bold">Full Name</label><input type="text" class="form-control" name="name" required></div>
+              <div class="col-md-3"><label class="fw-bold text-danger">Login Username</label><input type="text" class="form-control border-danger" name="username" required></div>
+              <div class="col-md-3">
+                <label class="fw-bold text-danger">Login Password</label>
+                <div class="input-group">
+                  <input type="password" class="form-control border-danger" name="password" id="createPass" required>
+                  <button type="button" class="btn btn-outline-secondary" onclick="togglePassField('createPass', this)"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+
+              <div class="col-md-3"><label class="fw-bold">Department</label><select class="form-select dept-dropdown" name="dept" onchange="updateSubAndPos(this, 'create')" required></select></div>
+              <div class="col-md-3"><label class="fw-bold">Sub-Department</label><select class="form-select sub-dept-dropdown" name="subDept"><option value="">Select Dept First</option></select></div>
+              <div class="col-md-3"><label class="fw-bold">Position</label><select class="form-select create-position" name="position"><option value="">Select Dept First</option></select></div>
+              <div class="col-md-3"><label class="fw-bold">Profile Photo</label><input type="file" class="form-control" id="photoFile" accept="image/*"></div>
+
+              <div class="col-md-3"><label class="fw-bold">Phone</label><input type="text" class="form-control" name="phone"></div>
+              <div class="col-md-3"><label class="fw-bold">Email</label><input type="email" class="form-control" name="email"></div>
+              <div class="col-md-3"><label class="fw-bold text-primary">SSB ID</label><input type="text" class="form-control border-primary" name="ssbId" placeholder="SSB Number"></div>
+              <div class="col-md-3"><label class="fw-bold text-primary">Tax ID</label><input type="text" class="form-control border-primary" name="taxId" placeholder="Tax Number"></div>
+
+              <!-- Bio/Skills နှင့် Internal Remark တစ်ခုလျှင် Column တစ်ခုစာ အကျယ် -->
+              <div class="col-md-6"><label class="fw-bold">Bio / Skills</label><textarea class="form-control" name="bio" rows="3" placeholder="Skills, qualifications..."></textarea></div>
+              <div class="col-md-6"><label class="fw-bold">Internal Remarks</label><textarea class="form-control" name="remark" rows="3" placeholder="Additional HR details..."></textarea></div>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3 px-4" id="btnCreate">Register Profile</button>
+          </form>
+        </div>
+
+        <!-- ၂။ ဝန်ထမ်းအချက်အလက် ပြင်ဆင်ခြင်း -->
+        <div class="tab-pane fade" id="editEmp">
+          <form id="formEdit" onsubmit="handleEmpSubmit(event, 'edit')">
+            <div class="row g-3 mb-3 bg-light p-2 rounded">
+              <div class="col-md-4">
+                <label class="fw-bold">Select Employee</label>
+                <select class="form-select border-primary" id="editEmpSelect" name="code" onchange="fetchEmpData()" required></select>
+              </div>
+              <div class="col-md-3 align-self-end" id="statusContainer" style="display:none;">
+                <label class="fw-bold text-dark mb-2">Employment Status</label>
+                <div class="form-check form-switch fs-5">
+                  <input class="form-check-input border-secondary" type="checkbox" id="statusToggle" name="status" checked>
+                  <label class="form-check-label fw-bold text-success" for="statusToggle" id="statusLabel">Active</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-3" id="editFields" style="display:none;">
+              <div class="col-md-3"><label class="fw-bold">Full Name</label><input type="text" class="form-control" name="name" required></div>
+              <div class="col-md-3"><label class="fw-bold text-danger">Login Username</label><input type="text" class="form-control border-danger" name="username" required></div>
+              <div class="col-md-3">
+                <label class="fw-bold text-danger">Login Password</label>
+                <div class="input-group">
+                  <input type="password" class="form-control border-danger" name="password" id="editPass" required>
+                  <button type="button" class="btn btn-outline-secondary" onclick="togglePassField('editPass', this)"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="col-md-3"><label class="fw-bold">Phone</label><input type="text" class="form-control" name="phone"></div>
+
+              <div class="col-md-3"><label class="fw-bold">Department</label><select class="form-select dept-dropdown" name="dept" onchange="updateSubAndPos(this, 'edit')" required></select></div>
+              <div class="col-md-3"><label class="fw-bold">Sub-Department</label><select class="form-select sub-dept-dropdown" name="subDept"></select></div>
+              <div class="col-md-3"><label class="fw-bold">Position</label><select class="form-select edit-position" name="position"></select></div>
+              <div class="col-md-3"><label class="fw-bold">Email</label><input type="email" class="form-control" name="email"></div>
+
+              <div class="col-md-3"><label class="fw-bold text-primary">SSB ID</label><input type="text" class="form-control border-primary" name="ssbId"></div>
+              <div class="col-md-3"><label class="fw-bold text-primary">Tax ID</label><input type="text" class="form-control border-primary" name="taxId"></div>
+              <div class="col-md-3 text-center">
+                <label class="fw-bold">Current Photo</label><br>
+                <img id="editEmpThumbnail" src="" style="max-height: 60px; display: none; border-radius: 5px; margin: 0 auto;">
+                <span id="noImageText" class="text-muted small" style="display:none;">No Photo</span>
+              </div>
+              <div class="col-md-3"><label class="fw-bold">Update Photo</label><input type="file" class="form-control" id="editPhotoFile" accept="image/*"></div>
+
+              <!-- Bio/Skills နှင့် Internal Remark တစ်ခုလျှင် Column တစ်ခုစာ အကျယ် -->
+              <div class="col-md-6"><label class="fw-bold">Bio / Skills</label><textarea class="form-control" name="bio" rows="3"></textarea></div>
+              <div class="col-md-6"><label class="fw-bold">Internal Remarks</label><textarea class="form-control" name="remark" rows="3"></textarea></div>
+
+              <input type="hidden" name="photoUrl" id="existingPhotoUrl">
+              <div class="col-md-12"><button type="submit" class="btn btn-success px-4" id="btnEdit">Update Profile</button></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- ၃။ ဌာနများ သတ်မှတ်ခြင်း -->
+        <div class="tab-pane fade" id="dept">
+          <form id="formDept" onsubmit="submitDeptForm(event)">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="fw-bold">Main Department</label>
+                <input list="mainDeptList" class="form-control border-primary" name="main" placeholder="e.g., Operations" required>
+                <datalist id="mainDeptList"></datalist>
+              </div>
+              <div class="col-md-4">
+                <label class="fw-bold">Sub-Department</label>
+                <input type="text" class="form-control border-primary" name="sub" placeholder="e.g., Logistics" required>
+              </div>
+              <div class="col-md-4 align-self-end"><button type="submit" class="btn btn-primary w-100">Add Division</button></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- ၄။ ရာထူး၊ System Transaction Type နှင့် Leave ရက်ပေါင်း သတ်မှတ်ခြင်း -->
+        <div class="tab-pane fade" id="settings">
+          <!-- (A) ရာထူး သတ်မှတ်ရန် -->
+          <form onsubmit="addSettingPair(event)" class="mb-4 pb-3 border-bottom">
+            <h6 class="fw-bold text-primary mb-3">1. Add Job Position by Department</h6>
+            <div class="row g-3">
+              <div class="col-md-4"><label class="fw-bold">Department</label><select id="pairDept" class="form-select border-primary" required></select></div>
+              <div class="col-md-4"><label class="fw-bold">Job Position</label><input type="text" id="pairPos" class="form-control border-primary" placeholder="e.g. Senior Analyst" required></div>
+              <div class="col-md-4 align-self-end"><button type="submit" class="btn btn-primary w-100">Add Position</button></div>
+            </div>
+          </form>
+
+          <!-- (B) Transaction အတွက် System Type သတ်မှတ်ရန် -->
+          <form onsubmit="addTransactionSysType(event)" class="mb-4 pb-3 border-bottom">
+            <h6 class="fw-bold text-success mb-3">2. Add System Type (For HR Transactions)</h6>
+            <div class="row g-3">
+              <div class="col-md-5">
+                <label class="fw-bold">System / Transaction Type Name</label>
+                <input type="text" id="transTypeName" class="form-control border-success" placeholder="e.g. BONUS, KPI REWARD, LATE WARNING, TRAINING" required>
+              </div>
+              <div class="col-md-4">
+                <label class="fw-bold">Score Effect</label>
+                <select id="transTypeEffect" class="form-select border-success">
+                  <option value="+">Add Points (+ Merit)</option>
+                  <option value="-">Deduct Points (- Demerit)</option>
+                  <option value="0">Neutral / Record Only (0)</option>
+                </select>
+              </div>
+              <div class="col-md-3 align-self-end"><button type="submit" class="btn btn-success w-100">Add System Type</button></div>
+            </div>
+          </form>
+
+          <!-- (C) Leave Type နှင့် ခွင့်ပြုရက်ပေါင်း သတ်မှတ်ရန် -->
+          <form onsubmit="addLeaveTypeSetting(event)" class="mb-4 pb-3 border-bottom">
+            <h6 class="fw-bold text-warning text-dark mb-3">3. Add Leave Type & Allowed Days</h6>
+            <div class="row g-3">
+              <div class="col-md-5">
+                <label class="fw-bold">Leave Type Name</label>
+                <input type="text" id="leaveTypeName" class="form-control border-warning" placeholder="e.g. Casual Leave, Medical Leave, Earned Leave" required>
+              </div>
+              <div class="col-md-4">
+                <label class="fw-bold">Allowed Days Per Year (ခွင့်ပြုရက်ပေါင်း)</label>
+                <input type="number" id="leaveAllowedDays" class="form-control border-warning" min="1" placeholder="e.g. 10" required>
+              </div>
+              <div class="col-md-3 align-self-end"><button type="submit" class="btn btn-warning fw-bold w-100">Save Leave Type</button></div>
+            </div>
+          </form>
+
+          <!-- (D) ရုံးချိန်နှင့် GPS သတ်မှတ်ရန် -->
+          <form onsubmit="addSystemSetting(event)">
+            <h6 class="fw-bold text-info text-dark mb-3">4. Office GPS & Work Time Settings</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="fw-bold">Setting Category</label>
+                <select id="sysCat" class="form-select border-info" required>
+                  <option value="Office Lat">Office Lat (e.g. 16.8409)</option>
+                  <option value="Office Lng">Office Lng (e.g. 96.1735)</option>
+                  <option value="Geo Radius">Geo Radius in Meters (e.g. 200)</option>
+                  <option value="Work Start">Work Start Time (e.g. 09:00)</option>
+                  <option value="Work End">Work End Time (e.g. 17:00)</option>
+                </select>
+              </div>
+              <div class="col-md-4"><label class="fw-bold">Value</label><input type="text" id="sysVal" class="form-control border-info" required></div>
+              <div class="col-md-4 align-self-end"><button type="submit" class="btn btn-info text-white w-100">Save Office Setting</button></div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // သင်၏ Firebase Config အချက်အလက်များကို ဤနေရာတွင် ထည့်ပါ
+    const firebaseConfig = {
+  apiKey: "AIzaSyCnQcsv8TekFkOyOPnb3UWZytPq7zBxLfI",
+  authDomain: "my-apps-a87a3.firebaseapp.com",
+  projectId: "my-apps-a87a3",
+  storageBucket: "my-apps-a87a3.firebasestorage.app",
+  messagingSenderId: "880270085984",
+  appId: "1:880270085984:web:d65a0c381172def3af1805"
+};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+    let appData = { emps: [], depts: [], settings: { departments: {} } };
+
+    function togglePassField(inputId, btn) {
+      const inp = document.getElementById(inputId);
+      const icon = btn.querySelector('i');
+      if (inp.type === 'password') { inp.type = 'text'; icon.classList.replace('bi-eye', 'bi-eye-slash'); }
+      else { inp.type = 'password'; icon.classList.replace('bi-eye-slash', 'bi-eye'); }
+    }
+
+    document.getElementById('statusToggle').addEventListener('change', function() {
+      let lbl = document.getElementById('statusLabel');
+      lbl.innerText = this.checked ? 'Active' : 'Resigned / Inactive';
+      lbl.className = this.checked ? 'form-check-label fw-bold text-success' : 'form-check-label fw-bold text-danger';
+    });
+
+    // Real-time Listeners
+    window.onload = function() {
+      db.collection('employees').onSnapshot({ includeMetadataChanges: true }, snap => {
+        const el = document.getElementById('connStatus');
+        el.className = snap.metadata.fromCache ? 'badge bg-secondary me-2' : 'badge bg-success me-2';
+        el.innerHTML = snap.metadata.fromCache ? '<i class="bi bi-wifi-off"></i> Offline' : '<i class="bi bi-wifi"></i> Live';
+        appData.emps = snap.docs.map(d => d.data());
+        renderEmps();
+      });
+
+      db.collection('departments').onSnapshot(snap => {
+        appData.depts = snap.docs.map(d => [d.data().main, d.data().sub]);
+        renderDepts();
+      });
+
+      db.collection('tms_settings').onSnapshot(snap => {
+        appData.settings.departments = {};
+        const reserved = ['Office Lat', 'Office Lng', 'Geo Radius', 'Work Start', 'Work End', 'Leave Type', 'System Type'];
+        snap.docs.forEach(doc => {
+          let r = doc.data();
+          if (!reserved.includes(r.category)) {
+            if (!appData.settings.departments[r.category]) appData.settings.departments[r.category] = [];
+            appData.settings.departments[r.category].push(r.subcategory);
+          }
+        });
+      });
+    };
+
+    function renderDepts() {
+      let mainDepts = [...new Set(appData.depts.map(d => d[0]).filter(Boolean))];
+      let deptOpts = '<option value="">Select Department...</option>' + mainDepts.map(d => `<option value="${d}">${d}</option>`).join('');
+      document.querySelectorAll('.dept-dropdown').forEach(el => {
+        let val = el.value; el.innerHTML = deptOpts; el.value = val;
+      });
+      document.getElementById('pairDept').innerHTML = deptOpts;
+      document.getElementById('mainDeptList').innerHTML = mainDepts.map(d => `<option value="${d}"></option>`).join('');
+    }
+
+    function renderEmps() {
+      let sel = document.getElementById('editEmpSelect');
+      let cur = sel.value;
+      let opts = appData.emps.map(e => `<option value="${e.code}">${e.code} - ${e.name} ${e.status === 'Inactive' ? '(Resigned)' : ''}</option>`).join('');
+      sel.innerHTML = opts ? '<option value="">Select Employee...</option>' + opts : '<option value="">No Data Found</option>';
+      sel.value = cur;
+    }
+
+    function updateSubAndPos(deptEl, actionType) {
+      let form = deptEl.closest('form');
+      let mainDept = deptEl.value;
+      let subSelect = form.querySelector('.sub-dept-dropdown');
+      if (subSelect) {
+        let subs = appData.depts.filter(d => d[0] === mainDept).map(d => d[1]).filter(Boolean);
+        subSelect.innerHTML = '<option value="">Select Sub-Department...</option>' + subs.map(s => `<option value="${s}">${s}</option>`).join('');
+      }
+      let posSelect = form.querySelector(actionType === 'create' ? '.create-position' : '.edit-position');
+      if (posSelect) {
+        let positions = appData.settings.departments[mainDept] || [];
+        posSelect.innerHTML = '<option value="">Select Position...</option>' + positions.map(p => `<option value="${p}">${p}</option>`).join('');
+      }
+    }
+
+    async function submitDeptForm(e) {
+      e.preventDefault();
+      let data = Object.fromEntries(new FormData(e.target).entries());
+      db.collection('departments').add({ main: data.main, sub: data.sub });
+      Swal.fire('Success', 'Department saved.', 'success');
+      e.target.reset();
+    }
+
+    async function addSettingPair(e) {
+      e.preventDefault();
+      let dept = document.getElementById('pairDept').value;
+      let pos = document.getElementById('pairPos').value;
+      db.collection('tms_settings').add({ category: dept, subcategory: pos });
+      Swal.fire('Added', 'Job Position saved.', 'success');
+      document.getElementById('pairPos').value = '';
+    }
+
+    async function addTransactionSysType(e) {
+      e.preventDefault();
+      let name = document.getElementById('transTypeName').value.trim().toUpperCase();
+      let effect = document.getElementById('transTypeEffect').value;
+      db.collection('tms_settings').add({ category: 'System Type', subcategory: name, effect: effect });
+      Swal.fire('Saved', `System Type "${name}" (${effect}) added.`, 'success');
+      document.getElementById('transTypeName').value = '';
+    }
+
+    async function addLeaveTypeSetting(e) {
+      e.preventDefault();
+      let name = document.getElementById('leaveTypeName').value.trim();
+      let days = Number(document.getElementById('leaveAllowedDays').value);
+      let existing = await db.collection('tms_settings').where('category', '==', 'Leave Type').where('subcategory', '==', name).get();
+      existing.forEach(d => d.ref.delete());
+      db.collection('tms_settings').add({ category: 'Leave Type', subcategory: name, allowed_days: days });
+      Swal.fire('Saved', `${name} (${days} Days) saved.`, 'success');
+      document.getElementById('leaveTypeName').value = '';
+      document.getElementById('leaveAllowedDays').value = '';
+    }
+
+    async function addSystemSetting(e) {
+      e.preventDefault();
+      let cat = document.getElementById('sysCat').value;
+      let val = document.getElementById('sysVal').value;
+      let existing = await db.collection('tms_settings').where('category', '==', cat).get();
+      existing.forEach(doc => doc.ref.delete());
+      db.collection('tms_settings').add({ category: cat, subcategory: val });
+      Swal.fire('Saved', 'Office setting updated.', 'success');
+      document.getElementById('sysVal').value = '';
+    }
+
+    function compressImage(file, maxWidth = 400) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const scale = maxWidth / img.width;
+            canvas.width = img.width > maxWidth ? maxWidth : img.width;
+            canvas.height = img.width > maxWidth ? img.height * scale : img.height;
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleEmpSubmit(e, action) {
+      e.preventDefault();
+      let form = e.target;
+      let data = Object.fromEntries(new FormData(form).entries());
+      let fileInput = document.getElementById(action === 'create' ? 'photoFile' : 'editPhotoFile');
+
+      data.status = action === 'edit' ? (document.getElementById('statusToggle').checked ? 'Active' : 'Inactive') : 'Active';
+      data.dept = data.subDept ? `${data.dept} > ${data.subDept}` : data.dept;
+      delete data.subDept;
+
+      if (fileInput.files.length > 0) {
+        data.photoUrl = await compressImage(fileInput.files[0], 400);
+      } else {
+        data.photoUrl = action === 'edit' ? document.getElementById('existingPhotoUrl').value : "";
+      }
+
+      if (action === 'create') {
+        data.created_at = Date.now();
+        db.collection('employees').doc(data.code).set(data);
+        Swal.fire('Success', 'New Employee registered.', 'success');
+        form.reset();
+      } else {
+        db.collection('employees').doc(data.code).update(data);
+        Swal.fire('Success', 'Employee profile updated.', 'success');
+      }
+    }
+
+    function fetchEmpData() {
+      const code = document.getElementById('editEmpSelect').value;
+      const emp = appData.emps.find(i => i.code === code);
+      if (emp) {
+        document.getElementById('editFields').style.display = 'flex';
+        document.getElementById('statusContainer').style.display = 'block';
+        let frm = document.getElementById('formEdit');
+        let dParts = emp.dept ? emp.dept.split(' > ') : [""];
+
+        frm.name.value = emp.name || '';
+        frm.username.value = emp.username || '';
+        frm.password.value = emp.password || '';
+        frm.ssbId.value = emp.ssbId || '';
+        frm.taxId.value = emp.taxId || '';
+        frm.bio.value = emp.bio || '';
+        frm.dept.value = dParts[0].trim();
+        updateSubAndPos(frm.dept, 'edit');
+        if (dParts.length > 1 && frm.subDept) frm.subDept.value = dParts[1].trim();
+        frm.position.value = emp.position || '';
+        frm.phone.value = emp.phone || '';
+        frm.email.value = emp.email || '';
+        frm.remark.value = emp.remark || '';
+
+        let toggle = document.getElementById('statusToggle');
+        toggle.checked = (emp.status !== 'Inactive');
+        toggle.dispatchEvent(new Event('change'));
+
+        let thumbImg = document.getElementById('editEmpThumbnail');
+        let noImgText = document.getElementById('noImageText');
+        document.getElementById('existingPhotoUrl').value = emp.photoUrl || '';
+        if (emp.photoUrl) {
+          thumbImg.src = emp.photoUrl; thumbImg.style.display = 'block'; noImgText.style.display = 'none';
+        } else {
+          thumbImg.style.display = 'none'; noImgText.style.display = 'block';
+        }
+      } else {
+        document.getElementById('editFields').style.display = 'none';
+        document.getElementById('statusContainer').style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
